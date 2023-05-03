@@ -1,0 +1,561 @@
+---
+title: "Final Project"
+output: pdf_document
+date: '2022-09-24'
+---
+
+```{r, echo=F}
+fire_data <- read.csv("Fire Incidents Data.csv", header=T)
+```
+
+Remove the variables that are not studied
+```{r, echo=F}
+fire_data$Area_of_Origin <- NULL
+fire_data$Building_Status <- NULL
+fire_data$Business_Impact <- NULL
+fire_data$Possible_Cause <- NULL
+fire_data$Civilian_Casualties <- NULL
+fire_data$Count_of_Persons_Rescued <- NULL
+fire_data$Estimated_Dollar_Loss <- NULL
+fire_data$Estimated_Number_Of_Persons_Displaced <- NULL
+fire_data$Exposures <- NULL
+fire_data$Ext_agent_app_or_defer_time <- NULL
+fire_data$Final_Incident_Type <- NULL
+fire_data$Fire_Alarm_System_Impact_on_Evacuation <- NULL
+fire_data$Fire_Alarm_System_Presence <- NULL
+fire_data$Incident_Number <- NULL
+fire_data$Incident_Station_Area <- NULL
+fire_data$Incident_Ward <- NULL
+fire_data$Initial_CAD_Event_Type <- NULL
+fire_data$Intersection <- NULL
+fire_data$Last_TFS_Unit_Clear_Time <- NULL
+fire_data$Latitude <- NULL
+fire_data$Level_Of_Origin <- NULL
+fire_data$Longitude <- NULL
+fire_data$Material_First_Ignited <- NULL
+fire_data$Method_Of_Fire_Control <- NULL
+fire_data$Number_of_responding_apparatus <- NULL
+fire_data$Property_Use <- NULL
+fire_data$Smoke_Alarm_at_Fire_Origin <- NULL
+fire_data$Smoke_Alarm_at_Fire_Origin_Alarm_Failure <- NULL
+fire_data$Smoke_Alarm_at_Fire_Origin_Alarm_Type <- NULL
+fire_data$Smoke_Alarm_Impact_on_Persons_Evacuating_Impact_on_Evacuation <- NULL
+fire_data$Smoke_Spread <- NULL
+fire_data$Sprinkler_System_Operation <- NULL
+fire_data$Sprinkler_System_Presence <- NULL
+fire_data$Status_of_Fire_On_Arrival <- NULL
+fire_data$TFS_Firefighter_Casualties <- NULL
+```
+
+Compute two "new" variables to study; the time to arrival and the response (time to control the fire)
+```{r, echo=F}
+fire_data$TFS_Alarm_Time <- as.POSIXct(gsub("T", " ", fire_data$TFS_Alarm_Time), format="%Y-%m-%d %H:%M:%S", tz="UTC")
+fire_data$TFS_Arrival_Time <- as.POSIXct(gsub("T", " ", fire_data$TFS_Arrival_Time), format="%Y-%m-%d %H:%M:%S", tz="UTC")
+fire_data$Fire_Under_Control_Time <- as.POSIXct(gsub("T", " ", fire_data$Fire_Under_Control_Time), format="%Y-%m-%d %H:%M:%S", tz="UTC")
+fire_data$Time_to_Arrival <- fire_data$TFS_Arrival_Time - fire_data$TFS_Alarm_Time
+fire_data$Time_to_Undercontrol <- fire_data$Fire_Under_Control_Time - fire_data$TFS_Arrival_Time
+```
+
+Identify and remove missing data
+```{r, echo=F}
+missing_row = c()
+for (column in fire_data) {
+  which_missing <- which(is.na(column))
+  missing_row <- append(missing_row, which_missing)
+}
+
+which_empty <- which(fire_data$Fire_Alarm_System_Operation == "")
+missing_row <- append(missing_row, which_empty)
+
+which_empty <- which(fire_data$Extent_Of_Fire == "")
+missing_row <- append(missing_row, which_empty)
+
+which_empty <- which(fire_data$Ignition_Source == "")
+missing_row <- append(missing_row, which_empty)
+
+unique_value <- unique(missing_row)
+fire_data <- fire_data[-unique_value,]
+```
+
+Convert the "time to arrival" and "time to control" to numerical value
+```{r, echo=F}
+fire_data$Time_to_Arrival <- as.numeric(fire_data$Time_to_Arrival)
+fire_data$Time_to_Undercontrol <- as.numeric(fire_data$Time_to_Undercontrol)
+fire_data$Fire_Alarm_System_Operation <- as.numeric(sub("\\-.*", "", fire_data$Fire_Alarm_System_Operation))
+fire_data$Extent_Of_Fire <- as.numeric(sub("\\-.*", "", fire_data$Extent_Of_Fire))
+fire_data$Ignition_Source <- as.numeric(sub("\\-.*", "", fire_data$Ignition_Source))
+```
+
+Remove nonsensical values
+```{r, echo=F}
+which_nonsensical <- which(fire_data$Time_to_Arrival <= 1)
+if (!length(which_nonsensical) == 0){
+  fire_data <- fire_data[-which_nonsensical,]
+}
+
+which_nonsensical <- which(fire_data$Time_to_Undercontrol <= 1)
+if (!length(which_nonsensical) == 0){
+  fire_data <- fire_data[-which_nonsensical,]
+}
+
+fire_data$Number_of_responding_personnel <- as.numeric(fire_data$Number_of_responding_personnel)
+which_nonsensical <- which(fire_data$Number_of_responding_personnel < 1)
+if (!length(which_nonsensical) == 0){
+  fire_data <- fire_data[-which_nonsensical,]
+}
+```
+
+Remove undetermined values
+```{r, echo=F}
+fire_data <- fire_data[!fire_data$Fire_Alarm_System_Operation == 9, ]
+
+fire_data <- fire_data[!fire_data$Extent_Of_Fire == 99, ]
+
+fire_data <- fire_data[!fire_data$Ignition_Source == 999, ]
+fire_data <- fire_data[!fire_data$Ignition_Source == 9990, ]
+```
+
+Split the data into training and test
+```{r, echo=F}
+nrow <- nrow(fire_data)
+ 
+set.seed(7)    
+
+?sample
+s <- sample(1:nrow, nrow/2, replace=F)
+
+train <- fire_data[s, ]
+
+test <- fire_data[-s,]
+
+write.csv(train, file="train_fire_data.csv")
+write.csv(train, file="test_fire_data.csv")
+```
+
+Make sure the training and test dataset have similar statistics 
+```{r, echo=F}
+means_train <- apply(train[,c(6, 9, 10)], 2, mean)
+means_test <- apply(test[,c(6, 9, 10)], 2, mean)
+
+sds_train <- apply(train[,c(6, 9, 10)], 2, sd)
+sds_test <- apply(test[,c(6, 9, 10)], 2, sd)
+
+counts_extent_train <- as.numeric(table(train[,2]))
+counts_extent_test <- as.numeric(table(test[,2]))
+
+counts_alarm_train <- as.numeric(table(train[,3]))
+counts_alarm_test <- as.numeric(table(test[,3]))
+
+counts_ignition_train <- as.numeric(table(train[,5]))
+counts_ignition_test <- as.numeric(table(test[,5]))
+```
+
+Variable | Training Set | Test Set
+---------|--------------|--------------
+Number of firefighters | `r means_train[1] ` (`r sds_train[1]`) | `r means_test[1]` (`r sds_test[1]`)
+Time to arrival | `r means_train[2]` (`r sds_train[2]`) | `r means_test[2]` (`r sds_test[2]`)
+Time to control the fire | `r means_train[3]` (`r sds_train[3]`)| `r means_test[3]` (`r sds_test[3]`)
+Extent of the fire | `r counts_extent_train` | `r counts_extent_test`
+Presence of fire alarm system | `r counts_alarm_train` | `r counts_alarm_test`
+Ignition source | `r counts_ignition_train` | `r counts_ignition_test`
+
+Table: The values in the "Time to arrival" row, the "Time to control the fire" row and the "Extent of the fire" row represent the mean and the value in parentheses is the standard deviation. The values in the "Extent of the fire" row, the  "Presence of fire alarm system" row and the "Ignition source" row represent the counts for each category.
+
+EDA
+```{r, echo=F}
+pairs(train[,-c(1, 4, 7, 8)])
+```
+
+Fit a linear model
+```{r, echo=F}
+complete_model <- lm(Time_to_Undercontrol ~ Number_of_responding_personnel + Time_to_Arrival + as.factor(Extent_Of_Fire) + as.factor(Fire_Alarm_System_Operation) + as.factor(Ignition_Source), data=train)
+```
+
+Check additional assumptions
+```{r, echo=F, eval=F}
+# check condition 1
+fit <- complete_model$fitted.values
+plot(train$Time_to_Undercontrol ~ fit)
+abline(a = 0, b = 1)
+lines(lowess(train$Time_to_Undercontrol ~ fit), lty=2)
+
+# check condition 2
+pairs(train[,-c(1, 4, 7, 8, 10)])
+par(mfrow=c(2,2))
+```
+
+Check assumptions for linear regression using the residuals
+```{r, echo=F}
+attributes(complete_model)
+r <- complete_model$residuals
+fit <- complete_model$fitted.values
+
+par(mfrow=c(2, 2))
+# create the residual versus fitted value plot
+plot(r ~ fit, xlab="Fitted Values", ylab="Residuals")
+
+# create each residual versus predictor plot
+plot(r ~ train$Time_to_Arrival, xlab="Time to Arrival", ylab="Residuals")
+plot(r ~ train$Number_of_responding_personnel, xlab="Number of Responding Personnel", ylab="Residuals")
+plot(r ~ train$Fire_Alarm_System_Operation, xlab="Presence of Fire Alarm System", ylab="Residuals")
+plot(r ~ train$Extent_Of_Fire, xlab="Extent of Fire", ylab="Residuals")
+plot(r ~ train$Ignition_Source, xlab="Ignition Source", ylab="Residuals")
+
+# create the qq plot
+qqnorm(r, ylab = "Residuals Quantiles")
+qqline(r)
+```
+
+Use BoxCox to help find a transformation
+```{r, echo=F}
+library(car)
+boxCox(complete_model)
+```
+
+Fit new model
+```{r, echo=F}
+train$sqrtTime_to_Undercontrol <- sqrt(train$Time_to_Undercontrol)
+
+transformed_model <- lm(sqrtTime_to_Undercontrol ~ Number_of_responding_personnel + Time_to_Arrival + as.factor(Extent_Of_Fire) + as.factor(Fire_Alarm_System_Operation) + as.factor(Ignition_Source), data=train)
+```
+
+Check condition 1 and 2 for transformed model
+```{r, echo=F, eval=F}
+# check condition 1
+fit <- transformed_model$fitted.values
+plot(train$sqrtTime_to_Undercontrol ~ fit)
+abline(a = 0, b = 1)
+lines(lowess(train$sqrtTime_to_Undercontrol ~ fit), lty=2)
+
+
+# check condition 2
+pairs(train[,-c(1, 4, 7, 8, 10)])
+```
+
+Check our assumptions using the residuals for the transformed model
+```{r, echo=F}
+attributes(transformed_model)
+r <- transformed_model$residuals
+fit <- transformed_model$fitted.values
+
+par(mfrow=c(2,2))
+
+# create the residual versus fitted values plot
+plot(r ~ fit, xlab="Fitted Values", ylab="Residuals")
+
+# create each residual versus predictor plot
+plot(r ~ train$Time_to_Arrival, xlab="Time to Arrival", ylab="Residuals")
+plot(r ~ train$Number_of_responding_personnel, xlab="Number of Responding Personnel", ylab="Residuals")
+plot(r ~ train$Fire_Alarm_System_Operation, xlab="Presence of Fire Alarm System", ylab="Residuals")
+plot(r ~ train$Extent_Of_Fire, xlab="Extent of Fire", ylab="Residuals")
+plot(r ~ train$Ignition_Source, xlab="Ignition Source", ylab="Residuals")
+
+# create the qq plot
+qqnorm(r, ylab = "Residuals Quantiles")
+qqline(r)
+```
+
+Fit reduced model
+```{r, echo=F}
+reduced_model_1 <- lm(sqrtTime_to_Undercontrol ~ Number_of_responding_personnel + as.factor(Fire_Alarm_System_Operation)  + as.factor(Extent_Of_Fire) + as.factor(Ignition_Source), data=train)
+```
+
+Check condition 1 and 2
+```{r, echo=F, eval=F}
+# check condition 1
+fit_1 <- reduced_model_1$fitted.values
+plot(train$sqrtTime_to_Undercontrol ~ fit_1)
+abline(a = 0, b = 1)
+lines(lowess(train$sqrtTime_to_Undercontrol ~ fit_1), lty=2)
+
+
+# check condition 2
+pairs(train[,-c(1, 4, 7:10)])
+```
+
+Check our assumptions using the residuals for the reduced model
+```{r, echo=F}
+attributes(reduced_model_1)
+r_1 <- reduced_model_1$residuals
+fit_1 <- reduced_model_1$fitted.values
+
+par(mfrow=c(2,2))
+# create the residual versus fitted value plot
+plot(r_1 ~ fit_1, main="Residuals vs Fitted Values", xlab="Fitted Values", ylab="Residuals")
+
+# create each residual versus predictor plot
+plot(r_1 ~ train$Number_of_responding_personnel)
+plot(r_1 ~ train$Fire_Alarm_System_Operation)
+plot(r_1 ~ train$Extent_Of_Fire)
+plot(r_1 ~ train$Ignition_Source)
+
+# create the qq plot
+qqnorm(r_1)
+qqline(r_1)
+```
+
+Look for the leverage, outlier and influential points
+```{r, echo=F, eval=F}
+# values to use in cutoffs
+n <- nrow(train)
+p <- length(coef(reduced_model_1))-1
+
+# define the cutoffs we will use
+Hcut <- 2*((p+1)/n)
+DFFITScut <- 2*sqrt((p+1)/n)
+DFBETAcut <- 2/sqrt(n)
+Dcut <- qf(0.5, p+1, n-p-1)
+
+# identify the leverage points
+h <- hatvalues(reduced_model_1)
+which(h>Hcut)
+
+# identify the outliers
+r <- rstandard(reduced_model_1)
+which(r < -4 | r > 4)
+
+# identify influential points by Cook's distance
+D <- cooks.distance(reduced_model_1)
+which(D > Dcut)
+
+# identify influential points by DFFITS
+fits <- dffits(reduced_model_1)
+which(abs(fits) > DFFITScut)
+
+# identify influential points by DFBETAS
+betas <- dfbetas(reduced_model_1)
+dim(betas)
+
+for(i in 1:91){
+  print(paste0("Beta ", i-1))
+  print(which(abs(betas[,i]) > DFBETAcut))
+}
+
+```
+
+Remove non-sensical values
+```{r, echo=F}
+train <- train[!train$Time_to_Arrival > 15000, ]
+```
+For this point, the alarm time is 7am and the firefighters arrived at 11:57am, then took them 6 minutes to control the fire. This data largely deviate from the rest of the data and clearly appear to be a mistake. It does not make sense for firefighters to take almost 5hours to get to the area and extinguish the fire in 6 minutes.
+
+```{r, echo=F}
+train <- train[!train$sqrtTime_to_Undercontrol > 150, ]
+```
+The time was not properly recorded in this point which yield a high time to control the fire
+
+```{r, echo=F}
+train <- train[!train$Number_of_responding_personnel > 500, ]
+```
+This point does make some sense
+
+Fit the new reduced model
+```{r, echo=F}
+reduced_model_2 <- lm(sqrtTime_to_Undercontrol ~ Number_of_responding_personnel + as.factor(Fire_Alarm_System_Operation) + as.factor(Extent_Of_Fire) + as.factor(Ignition_Source), data=train)
+```
+
+Check additional conditions
+```{r, echo=F, eval=F}
+# check condition 1
+fit_2 <- reduced_model_2$fitted.values
+plot(train$sqrtTime_to_Undercontrol ~ fit_2)
+abline(a = 0, b = 1)
+lines(lowess(train$sqrtTime_to_Undercontrol ~ fit_2), lty=2)
+
+
+# check condition 2
+pairs(train[,-c(1, 4, 7:10)])
+```
+
+Check our assumptions using the residuals for the final model
+```{r, echo=F}
+attributes(reduced_model_2)
+r_2 <- reduced_model_2$residuals
+fit_2 <- reduced_model_2$fitted.values
+
+par(mfrow=c(2,2))
+# create the residual versus fitted values plot
+plot(r_2 ~ fit_2, xlab="Fitted Values", ylab="Residuals")
+
+# create each residual versus predictor plot
+plot(r_2 ~ train$Number_of_responding_personnel, xlab="Number of Responding Personnel", ylab="Residuals")
+plot(r_2 ~ train$Fire_Alarm_System_Operation, xlab="Presence of Fire Alarm System", ylab="Residuals")
+plot(r_2 ~ train$Extent_Of_Fire, xlab="Extent of Fire", ylab="Residuals")
+plot(r_2 ~ train$Ignition_Source, xlab="Ignition Source", ylab="Residuals")
+
+# create the qq plot
+qqnorm(r_2)
+qqline(r_2)
+```
+
+Check for multicolinearity
+```{r, echo=F}
+vif(reduced_model_2)
+```
+
+Compare between models
+```{r, echo=F}
+select = function(model, n)
+{
+  SSres <- sum(model$residuals^2)
+  Rsq <- summary(model)$r.squared
+  Rsq_adj <- summary(model)$adj.r.squared
+  p <- length(model$coefficients) - 1
+  AIC <- n*log(SSres/n) + 2*p     
+  AICc <- AIC + (2*(p+2)*(p+3)/(n-p-1))
+  BIC <- n*log(SSres/n) + (p+2)*log(n)    
+  res <- c(SSres, Rsq, Rsq_adj, AIC, AICc, BIC)
+  names(res) <- c("SSres", "Rsq", "Rsq_adj", "AIC", "AIC_c", "BIC")
+  return(res)
+}
+
+# apply to the models
+m1 <- select(complete_model, nrow(train))
+m2 <- select(transformed_model, nrow(train))
+f <- select(reduced_model_2, nrow(train))
+```
+Model | Adjusted $R^2$ | Corrected AIC | BIC 
+------|----------------|-----|-----
+Full model | `r round(m1[3], 2)` | `r m1[5]` | `r m1[6]`
+Transformed model | `r m2[3]` | `r m2[5]` | `r m2[6]`
+Reduced model | `r f[3]` | `r f[5]` | `r f[6]`
+
+Table: Comparison between the different fitted models so that we can chose the preferred model. We chose the corrected AIC because the sampple size over the number of predictors plus two is smaller than 40.
+
+Validation step
+```{r, echo=F}
+model_test <- lm(Time_to_Undercontrol ~ Number_of_responding_personnel + Time_to_Arrival + as.factor(Extent_Of_Fire) + as.factor(Fire_Alarm_System_Operation) + as.factor(Ignition_Source), data=test)
+```
+
+Check additional conditions
+```{r, echo=F}
+# check condition 1
+fit_t <- model_test$fitted.values
+plot(test$Time_to_Undercontrol ~ fit_t)
+abline(a = 0, b = 1)
+lines(lowess(test$Time_to_Undercontrol ~ fit_t), lty=2)
+
+
+# check condition 2
+pairs(test[,-c(1, 4, 7:8)])
+```
+
+Check our assumptions using the residuals for the test model
+```{r, echo=F}
+attributes(model_test)
+r_t <- model_test$residuals
+fit_t <- model_test$fitted.values
+
+par(mfrow=c(2,2))
+# create the residual versus fitted values plot
+plot(r_t ~ fit_t, xlab="Fitted Values", ylab="Residuals")
+
+# create each residual versus predictor plot
+plot(r_t ~ test$Number_of_responding_personnel, xlab="Number of Responding Personnel", ylab="Residuals")
+plot(r_t ~ test$Fire_Alarm_System_Operation, xlab="Presence of Fire Alarm System", ylab="Residuals")
+plot(r_t ~ test$Extent_Of_Fire, xlab="Extent of Fire", ylab="Residuals")
+plot(r_t ~ test$Ignition_Source, xlab="Ignition Source", ylab="Residuals")
+
+# create the qq plot
+qqnorm(r_t)
+qqline(r_t)
+```
+
+```{r, echo=F}
+test$sqrtTime_to_Undercontrol <- sqrt(test$Time_to_Undercontrol)
+
+reduced_model_test <- lm(sqrtTime_to_Undercontrol ~ Number_of_responding_personnel + as.factor(Fire_Alarm_System_Operation)  + as.factor(Extent_Of_Fire) + as.factor(Ignition_Source), data=test)
+```
+
+Check additional conditions
+```{r, echo=F}
+# check condition 1
+fit_t <- reduced_model_test$fitted.values
+plot(test$sqrtTime_to_Undercontrol ~ fit_t)
+abline(a = 0, b = 1)
+lines(lowess(test$sqrtTime_to_Undercontrol ~ fit_t), lty=2)
+
+
+# check condition 2
+pairs(test[,-c(1, 4, 7:10)])
+```
+
+Check our assumptions using the residuals for the reduced model
+```{r, echo=F}
+attributes(reduced_model_test)
+r_t <- reduced_model_test$residuals
+fit_t <- reduced_model_test$fitted.values
+
+par(mfrow=c(2,2))
+# create the residual versus fitted values plot
+plot(r_t ~ fit_t, xlab="Fitted Values", ylab="Residuals")
+
+# create each residual versus predictor plot
+plot(r_t ~ test$Number_of_responding_personnel, xlab="Number of Responding Personnel", ylab="Residuals")
+plot(r_t ~ test$Fire_Alarm_System_Operation, xlab="Presence of Fire Alarm System", ylab="Residuals")
+plot(r_t ~ test$Extent_Of_Fire, xlab="Extent of Fire", ylab="Residuals")
+plot(r_t ~ test$Ignition_Source, xlab="Ignition Source", ylab="Residuals")
+
+# create the qq plot
+qqnorm(r_t)
+qqline(r_t)
+```
+
+\pagebreak
+```{r, echo=F}
+p1 <- length(coef(reduced_model_2))-1
+n1 <- nrow(train)
+vif1 <- max(vif(reduced_model_2))
+D1 <- length(which(cooks.distance(reduced_model_2) > qf(0.5, p1+1, n1-p1-1)))
+fits1 <- length(which(abs(dffits(reduced_model_2)) > 2*sqrt((p1+1)/n1)))
+
+coefs1 <- round(summary(reduced_model_2)$coefficients[,1], 3)
+ses1 <- round(summary(reduced_model_2)$coefficients[,2], 3)
+
+tp1 <- length(coef(reduced_model_test))-1
+tn1 <- nrow(test)
+tvif1 <- max(vif(reduced_model_test))
+tD1 <- length(which(cooks.distance(reduced_model_test) > qf(0.5, tp1+1, tn1-tp1-1)))
+tfits1 <- length(which(abs(dffits(reduced_model_test)) > 2*sqrt((tp1+1)/tn1)))
+
+tcoefs1 <- round(summary(reduced_model_test)$coefficients[,1], 3)
+tses1 <- round(summary(reduced_model_test)$coefficients[,2], 3)
+
+vif(reduced_model_2)
+vif(reduced_model_test)
+```
+
+Characteristic | Preferred Model (Train) | Preferred Model (Test) 
+---------------|----------------|---------------
+R-squared | 0.3831 | 0.3858 
+Adjusted R-squared | 0.3662 | 0.3695 
+---------------|----------------|---------------
+Largest VIF value | 1.45 | 1.35 
+Number of Cook's D | `r D1` | `r tD1` 
+Number of DFFITS | `r fits1` | `r tfits1` 
+Violations | Constant variance, Normality | Constant variance, Normality  
+---------------|----------------|---------------
+Intercept | `r coefs1[1]` $\pm$ `r ses1[1]`  | `r tcoefs1[1]` $\pm$ `r tses1[1]`  
+Number_of_responding_personnel   | `r coefs1[2]` $\pm$ `r ses1[2]`  |`r tcoefs1[2]` $\pm$ `r tses1[2]` 
+Fire_Alarm_System_Operation-2  | `r coefs1[3]` $\pm$ `r ses1[3]` |`r tcoefs1[3]` $\pm$ `r tses1[3]` 
+Fire_Alarm_System_Operation-8 | `r coefs1[4]` $\pm$ `r ses1[4]`  | `r tcoefs1[4]` $\pm$ `r tses1[4]`
+Extent_Of_Fire-2  | `r coefs1[5]` $\pm$ `r ses1[5]`  | `r tcoefs1[5]` $\pm$ `r tses1[5]` 
+Extent_Of_Fire-3  |  `r coefs1[6]` $\pm$ `r ses1[6]`  | `r tcoefs1[6]` $\pm$ `r tses1[6]` 
+Extent_Of_Fire-4  |  `r coefs1[7]` $\pm$ `r ses1[7]`   | `r tcoefs1[7]` $\pm$ `r tses1[7]`
+Extent_Of_Fire-5  | `r coefs1[8]` $\pm$ `r ses1[8]`  | `r tcoefs1[8]` $\pm$ `r tses1[8]` 
+Extent_Of_Fire-6 | `r coefs1[9]` $\pm$ `r ses1[9]`   | `r tcoefs1[9]` $\pm$ `r tses1[9]`
+Extent_Of_Fire-7  | `r coefs1[10]` $\pm$ `r ses1[10]`   | `r tcoefs1[10]` $\pm$ `r tses1[10]`
+Extent_Of_Fire-8 |  `r coefs1[11]` $\pm$ `r ses1[11]`   | `r tcoefs1[11]` $\pm$ `r tses1[11]`
+Extent_Of_Fire-9 |  `r coefs1[12]` $\pm$ `r ses1[12]`   | `r tcoefs1[12]` $\pm$ `r tses1[12]`
+Extent_Of_Fire-10  |  `r coefs1[13]` $\pm$ `r ses1[13]`   | `r tcoefs1[13]` $\pm$ `r tses1[13]` 
+Extent_Of_Fire-11  |  `r coefs1[14]` $\pm$ `r ses1[14]`   | `r tcoefs1[14]` $\pm$ `r tses1[14]`
+Ignition_Source-12 | `r coefs1[15]` $\pm$ `r ses1[15]`   | `r tcoefs1[15]` $\pm$ `r tses1[15]` 
+Ignition_Source-13 | `r coefs1[16]` $\pm$ `r ses1[16]`   | `r tcoefs1[16]` $\pm$ `r tses1[16]`   
+Ignition_Source-14  | `r coefs1[17]` $\pm$ `r ses1[17]`   | `r tcoefs1[17]` $\pm$ `r tses1[17]`   
+Ignition_Source-15  | `r coefs1[18]` $\pm$ `r ses1[18]`   | `r tcoefs1[18]` $\pm$ `r tses1[18]`
+Ignition_Source-16  | `r coefs1[19]` $\pm$ `r ses1[19]`   | `r tcoefs1[19]` $\pm$ `r tses1[19]`
+Ignition_Source-17  | `r coefs1[20]` $\pm$ `r ses1[20]`   | `r tcoefs1[20]` $\pm$ `r tses1[20]`
+Ignition_Source-19  | `r coefs1[21]` $\pm$ `r ses1[21]`   | `r tcoefs1[21]` $\pm$ `r tses1[21]` 
+... | ... | ...
+
+Table: Comparisons between the preferred model on the train and test data. For each coefficient, the first value is the mean and the second value is the standard deviation.
