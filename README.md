@@ -12,4 +12,4 @@ The findings suggest that a linear relationship exists between the time to contr
 ## Discussion:
 The study demonstrates the potential to predict the time it takes to control a fire using relevant factors. However, the model's limitations include normality violation and small sample size in some categories, which may cause biased predictor coefficients. Future research may benefit from larger sample sizes to improve the model's accuracy and generalizability.
 
-* See [Report](https://github.com/wilgagne/toronto-fire-incidents-analysis/blob/72d9a87d6b15cd994614370e86cd254b7b63a59b/Analysis_Report.pdf) for full analysis.
+* See [Report](https://github.com/wilgagne/toronto-fire-incidents-analysis/blob/02127c4b8537d578792bea9a7a2e82272a41319c/Analysis_Report.pdf) for full analysis.
