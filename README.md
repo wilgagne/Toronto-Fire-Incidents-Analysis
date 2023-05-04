@@ -6,7 +6,7 @@ This study aims to predict the time it takes to control residential fires using 
 ## Dataset:
 Link: https://open.toronto.ca/dataset/fire-incidents/
 
-his dataset encompasses fire incidents, as defined by the Ontario Fire Marshal (OFM), up until December 31, 2021. It offers more detailed information than the basic incidents dataset, specifically for fire incidents that the Toronto Fire Service (TFS) addresses. 
+This dataset encompasses fire incidents, as defined by the Ontario Fire Marshal (OFM), up until December 31, 2021. It offers more detailed information than the basic incidents dataset, specifically for fire incidents that the Toronto Fire Service (TFS) addresses. 
 To protect privacy, personal information has been omitted, and exact addresses have been aggregated to the nearest major or minor intersection. Incidents with incomplete data might still be under investigation or may be classified as no-loss outdoor fires.
 
 ## Methods:
